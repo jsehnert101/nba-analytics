@@ -2,7 +2,10 @@
 # Imports
 from data.teams.franchise_history import FranchiseHistory
 
-# from data.teams.team_data import TeamData
+from data.teams.team_data import TeamData
+from data.stats import Stats
+from data.teams.team_stats import TeamStats
+from utils.data import *
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
@@ -16,12 +19,42 @@ sns.set_theme()
 from typing import Union, Callable
 
 # %%
+folder: str = "../../../data/processed/teams/"
+season_type = "RegularSeason"
+team_id_map = load_data(folder+"team_id_map.pickle")
+team_ids = np.unique(list(team_id_map.values()))
+df_team_games = pd.concat(
+    [pd.read_parquet(
+                f"{folder}/games/{season_type}/{team_id}.parquet"
+            ) for team_id in team_ids]
+)
+
+# %%
+# Add basic stats
+stats = Stats()
+df_team_games["FG2A"] = stats.two_point_attempts(FGA=df_team_games.FGA.values, FG3A=df_team_games.FG3A.values)
+df_team_games["FG2M"] = stats.two_point_makes(FGM=df_team_games.FGM.values, FG3M=df_team_games.FG3M.values)
+df_team_games["FG2_PCT"] = stats.two_point_pct(FGA=)
+
+
+# %%
 # Retrieve + store entire history of NBA games
 folder: str = "../../../data/processed/teams/"
 team_data = TeamData(folder=folder, save_data=False, load_data=True)
 df_team_games = team_data.get_multiple_teams_games()
 df_team_games.drop(columns=["TEAM_ABBREVIATION", "TEAM_NAME"], inplace=True)
 df_team_games
+
+# %%
+# Add basic stats to data
+stats = Stats()
+
+df_team_games["2PA"]
+
+# %%
+# Add advanced stats to data
+team_stats = TeamStats()
+
 
 # %%
 # Get access to opposing team stats by merging on itself
@@ -40,7 +73,6 @@ df_team_games_MERGED = pd.concat(
     ],
     axis=1,
 )
-
 
 
 # %%

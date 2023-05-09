@@ -28,6 +28,7 @@ class TeamData:
         self._load_data, self._save_data = load_data, save_data
         self.metadata = self.get_team_metadata()
         self.team_ids: dict = self.get_team_id_map()
+        print(self.team_ids)
         self.league_id = LeagueID.nba
         self.franchise_history = (
             NBAFranchiseHistory().get_data_frames()[0].drop(columns=["LEAGUE_ID"])
@@ -80,7 +81,7 @@ class TeamData:
         return team_id_map
 
     def _load_team_games(
-        self, team_id: int, season_type: str
+        self, team_id: str, season_type: str
     ) -> Union[pd.DataFrame, None]:  # TODO: parallelize
         season_type = "".join(season_type.split())
         try:
@@ -92,7 +93,7 @@ class TeamData:
 
     @retry
     def _retrieve_team_games(
-        self, team_id: int, season_type: str = SeasonType.regular
+        self, team_id: str, season_type: str = SeasonType.regular
     ) -> pd.DataFrame:
         """Retrieves df of all games of a specified type for a given NBA team.
 
@@ -113,7 +114,7 @@ class TeamData:
     def _save_team_games(
         self,
         team_games: pd.DataFrame,
-        team_id: int,
+        team_id: str,
         season_type: str,
     ) -> bool:
         season_type = "".join(season_type.split())
@@ -132,7 +133,7 @@ class TeamData:
 
     def get_team_games(
         self,
-        team_id: int,
+        team_id: str,
         season_type: str = SeasonType.regular,
     ) -> pd.DataFrame:
         """Get all available games for given team and add desired stats.
@@ -178,7 +179,7 @@ class TeamData:
 
     def get_multiple_teams_games(
         self,
-        team_ids: Union[List[int], None] = None,
+        team_ids: Union[List[str], None] = None,
         season_type: str = SeasonType.regular,
     ) -> pd.DataFrame:
         """Merge team game logs for provided teams. If no teams provided, merge all teams.
