@@ -1,7 +1,7 @@
 # %%
 # Imports
 from data.teams.franchise_history import FranchiseHistory
-
+from tqdm import tqdm
 from data.teams.team_data import TeamData
 from data.stats import Stats
 from data.teams.team_stats import TeamStats
@@ -17,48 +17,34 @@ import seaborn as sns
 sns.set_theme()
 
 from typing import Union, Callable
+from nba_api.stats.static import teams
+
 
 # %%
+# Load all team game data
 folder: str = "../../../data/processed/teams/"
-season_type = "RegularSeason"
-team_id_map = load_data(folder+"team_id_map.pickle")
-team_ids = np.unique(list(team_id_map.values()))
-df_team_games = pd.concat(
-    [pd.read_parquet(
-                f"{folder}/games/{season_type}/{team_id}.parquet"
-            ) for team_id in team_ids]
-)
+team_data = TeamData(folder=folder, save=False, load=True)
+df_team_games = team_data.get_multiple_teams_games().rename(columns={"MIN": "MP"})
+df_team_games.head()
 
 # %%
-# Add basic stats
+# Add stats to our df
 stats = Stats()
-df_team_games["FG2A"] = stats.two_point_attempts(FGA=df_team_games.FGA.values, FG3A=df_team_games.FG3A.values)
-df_team_games["FG2M"] = stats.two_point_makes(FGM=df_team_games.FGM.values, FG3M=df_team_games.FG3M.values)
-df_team_games["FG2_PCT"] = stats.two_point_pct(FGA=)
-
-
-# %%
-# Retrieve + store entire history of NBA games
-folder: str = "../../../data/processed/teams/"
-team_data = TeamData(folder=folder, save_data=False, load_data=True)
-df_team_games = team_data.get_multiple_teams_games()
-df_team_games.drop(columns=["TEAM_ABBREVIATION", "TEAM_NAME"], inplace=True)
-df_team_games
-
-# %%
-# Add basic stats to data
-stats = Stats()
-
-df_team_games["2PA"]
-
-# %%
-# Add advanced stats to data
+print(stats.required_stat_params)
 team_stats = TeamStats()
-
+print(team_stats.required_stat_params)
+df_team_games_dict = df_team_games.loc[
+    :, df_team_games.columns.isin(team_stats.required_stat_params)
+].to_dict(
+    orient="list"
+)  # type: ignore
+for stat_name, stat_func in tqdm(team_stats.independent_stat_method_map.items()):
+    df_team_games[stat_name] = stat_func(**df_team_games_dict)
+df_team_games.head()
 
 # %%
-# Get access to opposing team stats by merging on itself
-df_team_games_MERGED = pd.concat(
+# Append opponent statistics and calculate dependent stats
+df_team_games_merged = pd.concat(
     [
         df_team_games.groupby(
             ["SEASON_ID", "GAME_ID", "GAME_DATE", "HOME", "TEAM_ID"], sort=True
@@ -73,6 +59,15 @@ df_team_games_MERGED = pd.concat(
     ],
     axis=1,
 )
+df_team_games_merged_dict = df_team_games_merged.loc[:, df_team_games_merged.columns.isin(team_stats.required_stat_params)].to_dict(orient="list")  # type: ignore
+for stat_name, stat_func in tqdm(team_stats.dependent_stat_method_map.items()):
+    df_team_games_merged[stat_name] = stat_func(**df_team_games_merged_dict)
+df_team_games_merged.head()
+
+# %%
+# Merge data on itself once again to access opponent dependent stats
+# TODO: See above
+# TODO: manually fill in missing data
 
 
 # %%

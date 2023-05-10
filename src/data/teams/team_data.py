@@ -1,18 +1,17 @@
 # %% Import necessary libraries
 import numpy as np
 import pandas as pd
-
-pd.options.display.max_columns = 50
 from nba_api.stats.static import teams
 from nba_api.stats.endpoints import (
     leaguegamefinder,
-    FranchiseHistory as NBAFranchiseHistory,
+    FranchiseHistory,
 )
 from nba_api.stats.library.parameters import LeagueID, SeasonType
-from data.teams.franchise_history import FranchiseHistory
-from utils.data import *
+from utils.data import load_data, save_data, retry
 from typing import Union, List, Dict, Any
 from data.stats import Stats
+
+pd.options.display.max_columns = 50
 
 
 # %%
@@ -21,17 +20,16 @@ class TeamData:
     def __init__(
         self,
         folder: str = "../../../data/processed/teams/",
-        load_data: bool = True,
-        save_data: bool = False,
+        load: bool = True,
+        save: bool = False,
     ):
         self._folder = folder
-        self._load_data, self._save_data = load_data, save_data
+        self._load_data, self._save_data = load, save
         self.metadata = self.get_team_metadata()
         self.team_ids: dict = self.get_team_id_map()
-        print(self.team_ids)
         self.league_id = LeagueID.nba
         self.franchise_history = (
-            NBAFranchiseHistory().get_data_frames()[0].drop(columns=["LEAGUE_ID"])
+            FranchiseHistory().get_data_frames()[0].drop(columns=["LEAGUE_ID"])
         )
         self.stats = Stats()
 
@@ -39,17 +37,22 @@ class TeamData:
         return teams.get_teams()
 
     def _load_team_metadata(self) -> List[Dict[str, Any]]:
-        return load_data(pth=self._folder + "team_metadata.pickle")
+        return load_data(pth=f"{self._folder}team_metadata.pickle")  # type: ignore
 
     def get_team_metadata(self) -> List[Dict[str, Any]]:
+        """Load team metadata from local file or retrieve from online.
+
+        Returns:
+            List[Dict[str, Any]]: list of dictionaries containing team metadata.
+        """
         team_metadata = self._load_team_metadata()
         if team_metadata is None:
             team_metadata = self._retrieve_team_metadata()
-            save_data(data=team_metadata, pth=self._folder + "team_metadata.pickle")
+            save_data(data=team_metadata, pth=f"{self._folder}team_metadata.pickle")
         return team_metadata
 
     def _load_team_id_map(self) -> Union[Dict[str, int], None]:
-        return load_data(pth=self._folder + "team_id_map.pickle")
+        return load_data(pth=f"{self._folder}team_id_map.pickle")  # type: ignore
 
     def _create_team_id_map(self) -> Dict[str, int]:
         """Create mapping from team name, city and abbreviation to team ID.
@@ -131,6 +134,28 @@ class TeamData:
         """Add all basic + team stats to team game statistics"""
         return
 
+    def _clean_team_games(self, team_games: pd.DataFrame) -> pd.DataFrame:
+        """Clean team game statistics.
+
+        Args:
+            team_games (pd.DataFrame): dataframe of team game statistics.
+
+        Returns:
+            pd.DataFrame: cleaned dataframe of team game statistics.
+        """
+        team_games["GAME_DATE"] = pd.to_datetime(team_games.GAME_DATE)
+        team_games = team_games.sort_values("GAME_DATE", ascending=True).reset_index(
+            drop=True
+        )
+        team_games["WIN"] = team_games.WL.replace({"W": True, "L": False})
+        team_games["HOME"] = np.NaN
+        team_games.loc[:, "HOME"] = team_games.MATCHUP.str.contains("vs.")
+        team_games.loc[team_games.FG3A == 0, "FG3_PCT"] = 0
+        team_games["REST_DAYS"] = (
+            team_games.groupby("SEASON_ID")["GAME_DATE"].diff().dt.days.astype(float)  # type: ignore
+        )
+        return team_games
+
     def get_team_games(
         self,
         team_id: str,
@@ -158,19 +183,7 @@ class TeamData:
         else:
             return df_games
 
-        df_games["GAME_DATE"] = pd.to_datetime(df_games.GAME_DATE)
-        df_games = df_games.sort_values("GAME_DATE", ascending=True).reset_index(
-            drop=True
-        )
-        df_games["WIN"] = df_games.WL.replace({"W": True, "L": False})
-        df_games["HOME"] = np.NaN
-        df_games.loc[:, "HOME"] = df_games.MATCHUP.str.contains("vs.")
-        df_games.loc[df_games.FG3A == 0, "FG3_PCT"] = 0
-        df_games["REST_DAYS"] = (
-            df_games.groupby("SEASON_ID")["GAME_DATE"].diff().dt.days.astype(float)
-        )
-        df_games.rename(columns={"REB": "RB"})
-        # for key in
+        df_games = self._clean_team_games(team_games=df_games)
         if self._save_data:
             self._save_team_games(
                 team_games=df_games, team_id=team_id, season_type=season_type
@@ -192,9 +205,9 @@ class TeamData:
             pd.DataFrame: merged dataframe of all team game logs.
         """
         if team_ids is None:
-            team_ids = np.unique(list(self.team_ids.values()))
+            team_ids = np.unique(list(self.team_ids.values()))  # type: ignore
         team_games = []
-        for team_id in team_ids:
+        for team_id in team_ids:  # type: ignore
             team_games.append(
                 self.get_team_games(team_id=team_id, season_type=season_type)
             )
