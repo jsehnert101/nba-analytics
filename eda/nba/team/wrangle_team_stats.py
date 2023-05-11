@@ -2,10 +2,11 @@
 # Imports
 from data.teams.franchise_history import FranchiseHistory
 from tqdm import tqdm
-from data.teams.team_data import TeamData
+from data.teams.team_game_data import TeamGameData
 from data.stats import Stats
 from data.teams.team_stats import TeamStats
-from utils.data import *
+
+# from data.utils.data import *
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
@@ -16,14 +17,21 @@ import seaborn as sns
 
 sns.set_theme()
 
-from typing import Union, Callable
+from typing import Union, Callable, Dict, List, Tuple
+import pickle
 from nba_api.stats.static import teams
 
+# %%
+from data.teams.team_game_data import TeamGameData
+
+team_game_data = TeamGameData()
+df_team_games = team_game_data.get_multiple_teams_games()
+df_team_games
 
 # %%
 # Load all team game data
-folder: str = "../../../data/processed/teams/"
-team_data = TeamData(folder=folder, save=False, load=True)
+folder: str = "../../../data/processed/teams"
+team_data = TeamData(save=False, load=True)
 df_team_games = team_data.get_multiple_teams_games().rename(columns={"MIN": "MP"})
 df_team_games.head()
 
@@ -41,6 +49,9 @@ df_team_games_dict = df_team_games.loc[
 for stat_name, stat_func in tqdm(team_stats.independent_stat_method_map.items()):
     df_team_games[stat_name] = stat_func(**df_team_games_dict)
 df_team_games.head()
+
+# %%
+# Manually impute missing data
 
 # %%
 # Append opponent statistics and calculate dependent stats
@@ -68,6 +79,17 @@ df_team_games_merged.head()
 # Merge data on itself once again to access opponent dependent stats
 # TODO: See above
 # TODO: manually fill in missing data
+df_gs = pd.read_parquet(
+    "../../../data/processed/teams/games/RegularSeason/1610612744.parquet"
+)
+df_gs
+
+
+# %%
+# Enforce file structure
+import os
+
+os.path.isdir(folder)
 
 
 # %%
