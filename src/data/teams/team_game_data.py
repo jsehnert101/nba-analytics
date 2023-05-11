@@ -2,12 +2,14 @@
 # Imports
 import os
 from concurrent.futures import ThreadPoolExecutor
+from cachetools import cached
 from typing import List, Literal, Union
+from tqdm import tqdm
 import numpy as np
 import pandas as pd
 from nba_api.stats.endpoints import leaguegamefinder
 from nba_api.stats.library.parameters import LeagueID, SeasonType
-from data.utils.data import save_data, retry
+from data.utils.data import save_data, retry, cache
 from data.teams.team_data import TeamData
 from data.teams.team_stats import TeamStats
 
@@ -54,6 +56,7 @@ class TeamGameData(TeamData):
             print(e)
             return None
 
+    @cached(cache)
     @retry
     def _retrieve_team_games(
         self, team_id: int, season_type: str = SeasonType.regular
@@ -85,11 +88,16 @@ class TeamGameData(TeamData):
         folder = os.path.join(self.folder_map[folder_type], "games", season_type)
         return save_data(data=team_games, folder=folder, name=f"{team_id}.parquet")
 
-    def add_team_stats(self):
-        """Add all basic + team stats to team game statistics"""
+    def impute_missing_stats(self):
+        """Manually replace missing statistics."""
 
-    def _clean_team_games(self, team_games: pd.DataFrame) -> pd.DataFrame:
-        """Clean team game statistics.
+    def _clean_team_games(
+        self,
+        team_games: pd.DataFrame,
+        team_id: int,
+        season_type: str = SeasonType.regular,
+    ) -> pd.DataFrame:
+        """Clean team game statistics then save to interim folder if not already present.
 
         Args:
             team_games (pd.DataFrame): dataframe of team game statistics.
@@ -109,6 +117,19 @@ class TeamGameData(TeamData):
         team_games["REST_DAYS"] = (
             team_games.groupby("SEASON_ID")["GAME_DATE"].diff().dt.days.astype(float)  # type: ignore
         )
+        interim_pth = os.path.join(
+            self._interim_folder,
+            "games",
+            "".join(season_type.split()),
+            f"{team_id}.parquet",
+        )
+        if not os.path.isfile(interim_pth):
+            self._save_team_games(
+                team_games=team_games,
+                team_id=team_id,
+                season_type=season_type,
+                folder_type="interim",
+            )
         return team_games
 
     def get_team_games(
@@ -151,36 +172,25 @@ class TeamGameData(TeamData):
                     season_type=season_type,
                     folder_type="raw",
                 )
-            df_games = self._clean_team_games(team_games=df_games)
-            interim_pth = os.path.join(
-                self._interim_folder,
-                "games",
-                "".join(season_type.split()),
-                f"{team_id}.parquet",
+            df_games = self._clean_team_games(
+                team_games=df_games, team_id=team_id, season_type=season_type
             )
-            if not os.path.isfile(interim_pth):
-                self._save_team_games(
-                    team_games=df_games,
-                    team_id=team_id,
-                    season_type=season_type,
-                    folder_type="interim",
-                )
             return df_games
         else:
             return df_games
 
     def get_multiple_teams_games(
         self,
-        team_ids: Union[List[str], None] = None,
+        team_ids: Union[List[int], None] = None,
         season_type: str = SeasonType.regular,
-        folder_type: Literal["raw", "interim", "processed"] = "processed",
+        folder_type: Literal["raw", "interim", "processed"] = "interim",
         max_workers: int = 6,
     ) -> pd.DataFrame:
         """
         Retrieve + merge all available games for provided teams. If no teams provided, merge all teams.
 
         Args:
-            team_ids (Union[List[str], None], optional): list of Team IDs to retrieve. Defaults to None.
+            team_ids (Union[List[int], None], optional): list of Team IDs to retrieve. Defaults to None.
             season_type (str, optional): season type from which to retrieve. Defaults to SeasonType.regular.
             max_workers (int, optional): max workers in multithreading. Defaults to 6.
 
@@ -197,3 +207,88 @@ class TeamGameData(TeamData):
                 np.repeat(folder_type, len(team_ids)),
             )
         return pd.concat([res for res in results])
+
+    def add_independent_team_stats(self, df_team_games: pd.DataFrame) -> pd.DataFrame:
+        """Add all basic + team stats to team game statistics"""
+        df_team_games_dict = df_team_games.loc[
+            :, df_team_games.columns.isin(self.team_stats.required_stat_params)
+        ].to_dict(  # type: ignore
+            orient="list"
+        )
+        for stat_name, stat_func in tqdm(
+            self.team_stats.independent_stat_method_map.items()
+        ):
+            df_team_games[stat_name] = stat_func(**df_team_games_dict)
+        return df_team_games
+
+    def merge_team_games(self, df_team_games: pd.DataFrame) -> pd.DataFrame:
+        """Merge team game statistics with opponent game statistics, adding 'OPP_' prefix to opponent stats."""
+        return pd.concat(
+            [
+                df_team_games.groupby(
+                    ["SEASON_ID", "GAME_ID", "GAME_DATE", "HOME", "TEAM_ID"], sort=True
+                )
+                .first()
+                .reset_index(),
+                df_team_games.groupby(
+                    ["SEASON_ID", "GAME_ID", "GAME_DATE", "HOME", "TEAM_ID"]
+                )
+                .first()
+                .sort_index(level=[0, 1, 2, 3], ascending=[True, True, True, False])
+                .reset_index()
+                .add_prefix("OPP_"),
+            ],
+            axis=1,
+        )
+
+    def add_dependent_team_stats(self, df_team_games: pd.DataFrame) -> pd.DataFrame:
+        """Add all dependent team stats to team game statistics"""
+        df_team_games_dict = df_team_games.loc[
+            :, df_team_games.columns.isin(self.team_stats.required_stat_params)
+        ].to_dict(  # type: ignore
+            orient="list"
+        )
+        for stat_name, stat_func in tqdm(
+            self.team_stats.dependent_stat_method_map.items()
+        ):
+            df_team_games[stat_name] = stat_func(**df_team_games_dict)
+        return df_team_games
+
+    def add_stats(self, df_team_games: pd.DataFrame) -> pd.DataFrame:
+        df_team_games = self.add_independent_team_stats(
+            df_team_games=df_team_games
+        )  # Add team-specific stats
+        df_team_games_merged = self.merge_team_games(
+            df_team_games=df_team_games
+        )  # Merge with opponent stats
+        df_team_games_merged = self.add_dependent_team_stats(
+            df_team_games=df_team_games_merged
+        )  # Add opponent-specific stats
+        return df_team_games_merged
+
+    def get_all_data(
+        self,
+        team_ids: Union[List[int], None] = None,
+        season_type: str = SeasonType.regular,
+    ) -> pd.DataFrame:
+        df_team_games = self.get_multiple_teams_games(
+            team_ids=team_ids,
+            season_type=season_type,
+            folder_type="interim",
+            max_workers=12,
+        )
+        df_team_games = self.add_stats(df_team_games=df_team_games)
+        processed_pth = os.path.join(
+            self._processed_folder,
+            "games",
+            "".join(season_type.split()),
+            "all_team_games.parquet",
+        )
+        if not os.path.isfile(processed_pth):
+            self._save_team_games(
+                team_games=df_team_games,
+                team_id=0,
+                season_type=season_type,
+                folder_type="processed",
+            )
+        return df_team_games

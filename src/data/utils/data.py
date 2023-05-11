@@ -3,13 +3,14 @@
 import os
 import time
 import pickle
-import threading
 from typing import Union, List, Dict, Tuple, Callable
+from cachetools import TTLCache
 import requests
 import pandas as pd
 
 
 # %%
+# Helper functions
 def save(func: Callable):
     """Save wrapper to create directories if they don't exist.
 
@@ -108,3 +109,6 @@ def retry(func: Callable, retries=3):
                 attempts += 1
 
     return retry_wrapper
+
+
+cache = TTLCache(maxsize=128, ttl=300)

@@ -2,7 +2,9 @@
 # Imports
 from data.teams.franchise_history import FranchiseHistory
 from tqdm import tqdm
-from data.teams.team_game_data import TeamGameData
+
+# from data.teams.team_game_data import TeamGameData
+from data.teams.team_data import TeamData
 from data.stats import Stats
 from data.teams.team_stats import TeamStats
 
@@ -23,57 +25,30 @@ from nba_api.stats.static import teams
 
 # %%
 from data.teams.team_game_data import TeamGameData
+import time
 
 team_game_data = TeamGameData()
 df_team_games = team_game_data.get_multiple_teams_games()
+df_team_games = team_game_data.add_independent_team_stats(df_team_games)
+df_team_games_merged = team_game_data.merge_team_games(df_team_games)
+df_team_games_merged = team_game_data.add_dependent_team_stats(df_team_games_merged)
+df_team_games_merged
+
+# %%
+from data.teams.team_game_data import TeamGameData
+import time
+
+team_game_data = TeamGameData()
+start = time.time()
+df_team_games = team_game_data.get_all_data()
+end = time.time()
+print(f"That took {end-start:.6f}s!")
 df_team_games
 
 # %%
-# Load all team game data
-folder: str = "../../../data/processed/teams"
-team_data = TeamData(save=False, load=True)
-df_team_games = team_data.get_multiple_teams_games().rename(columns={"MIN": "MP"})
-df_team_games.head()
+df_team_games_merged = team_game_data.add_dependent_team_stats(df_team_games_merged)
+df_team_games_merged
 
-# %%
-# Add stats to our df
-stats = Stats()
-print(stats.required_stat_params)
-team_stats = TeamStats()
-print(team_stats.required_stat_params)
-df_team_games_dict = df_team_games.loc[
-    :, df_team_games.columns.isin(team_stats.required_stat_params)
-].to_dict(
-    orient="list"
-)  # type: ignore
-for stat_name, stat_func in tqdm(team_stats.independent_stat_method_map.items()):
-    df_team_games[stat_name] = stat_func(**df_team_games_dict)
-df_team_games.head()
-
-# %%
-# Manually impute missing data
-
-# %%
-# Append opponent statistics and calculate dependent stats
-df_team_games_merged = pd.concat(
-    [
-        df_team_games.groupby(
-            ["SEASON_ID", "GAME_ID", "GAME_DATE", "HOME", "TEAM_ID"], sort=True
-        )
-        .first()
-        .reset_index(),
-        df_team_games.groupby(["SEASON_ID", "GAME_ID", "GAME_DATE", "HOME", "TEAM_ID"])
-        .first()
-        .sort_index(level=[0, 1, 2, 3], ascending=[True, True, True, False])
-        .add_prefix("OPP_")
-        .reset_index(),
-    ],
-    axis=1,
-)
-df_team_games_merged_dict = df_team_games_merged.loc[:, df_team_games_merged.columns.isin(team_stats.required_stat_params)].to_dict(orient="list")  # type: ignore
-for stat_name, stat_func in tqdm(team_stats.dependent_stat_method_map.items()):
-    df_team_games_merged[stat_name] = stat_func(**df_team_games_merged_dict)
-df_team_games_merged.head()
 
 # %%
 # Merge data on itself once again to access opponent dependent stats
@@ -83,39 +58,6 @@ df_gs = pd.read_parquet(
     "../../../data/processed/teams/games/RegularSeason/1610612744.parquet"
 )
 df_gs
-
-
-# %%
-# Enforce file structure
-import os
-
-os.path.isdir(folder)
-
-
-# %%
-# Get team + opponent stats
-from nba_api.stats.endpoints import cumestatsteam
-
-cumestatsteam.CumeStatsTeam(
-    league_id="00",
-    team_id=team_data.team_ids["CHI"],
-    season=21983,
-    season_type_all_star="Regular Season",
-    game_ids="0022201223",
-).get_data_frames()[1]
-
-
-# %%
-team_data.team_ids["CHI"]
-
-# %%
-from nba_api.stats.endpoints import gamerotation
-
-gamerotation.GameRotation(league_id="00", game_id="0022000001").get_data_frames()[1]
-
-# %%
-df_chi = df_team_games.loc[df_team_games.TEAM_ID == team_data.team_ids["CHI"], :].copy()
-df_chi
 
 
 # %%
