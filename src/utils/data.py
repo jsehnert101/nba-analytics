@@ -11,7 +11,7 @@ import pandas as pd
 
 # %%
 # Helper functions
-def save(func: Callable):
+def manage_path(func: Callable):
     """Save wrapper to create directories if they don't exist.
 
     Args:
@@ -19,56 +19,18 @@ def save(func: Callable):
     """
 
     def save_wrapper(*args, **kwargs) -> bool:
-        print("Saving data...")
+        # print("Saving data...")
         try:
             return func(*args, **kwargs)
-        except Exception as e:
+        except Exception:
             try:
-                print(e)
-                print("Creating folder...")
                 os.makedirs(kwargs["folder"], exist_ok=True)
-                print("Folder created.")
                 return func(*args, **kwargs)
-            except Exception as e2:
-                print(e2)
-                print("Folder still not found.")
-                print("Removing created folder...")
-                os.rmdir(kwargs["folder"])
+            except Exception as e:
+                print(e)
                 return False
 
     return save_wrapper
-
-
-@save
-def save_data(data, folder: str, name: str) -> bool:
-    """
-    Save data to desired location.
-    pandas DataFrames/Series are saves as parquet files.
-
-    Args:
-        data (_type_): data to be saved.
-            If pandas DataFrame/Series, columns must be strings.
-            If other, must be pickleable.
-        folder (str): folder to store data. Cannot start with '/'.
-        name (str): name of file to store data.
-
-    Returns:
-        bool: True/False depending on success.
-    """
-    if isinstance(data, pd.DataFrame):
-        if name.split(".")[-1] != "parquet":
-            name += ".parquet"
-        pth = os.path.join(folder, name)
-        data.to_parquet(pth)
-        print(f"{name} saved to {os.path.abspath(folder)}")
-        return True
-    if name.split(".")[-1] != "pickle":
-        name += ".pickle"
-    pth = os.path.join(folder, name)
-    with open(pth, "wb") as handle:
-        pickle.dump(data, handle, protocol=pickle.HIGHEST_PROTOCOL)
-    print(f"{name} saved to {os.path.abspath(folder)}")
-    return True
 
 
 def load_data(pth: str) -> Union[Dict, List, Tuple, None]:
@@ -89,7 +51,6 @@ def load_data(pth: str) -> Union[Dict, List, Tuple, None]:
         return None
 
 
-# Retry Wrapper
 def retry(func: Callable, retries=3):
     """Retry wrapper for requests to bypass throttling.
 
@@ -111,4 +72,14 @@ def retry(func: Callable, retries=3):
     return retry_wrapper
 
 
-cache = TTLCache(maxsize=128, ttl=300)
+def get_pth_to_desktop() -> str:
+    """Get path to desktop for any OS."""
+    return os.path.expanduser("~/Desktop")
+
+
+def join_str(s: str) -> str:
+    """Elminate spaces in string."""
+    return "".join(s.split())
+
+
+cache = TTLCache(maxsize=128, ttl=300)  # TODO: improve cache

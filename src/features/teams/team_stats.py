@@ -4,7 +4,7 @@ import inspect
 from typing import List
 import numpy as np
 from numpy.typing import ArrayLike
-from data.stats import Stats
+from features.stats import Stats
 
 # %%
 # Define object to compute NBA team statistics.

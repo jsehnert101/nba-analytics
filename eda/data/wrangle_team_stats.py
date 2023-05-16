@@ -5,8 +5,8 @@ from tqdm import tqdm
 
 # from data.teams.team_game_data import TeamGameData
 from data.teams.team_data import TeamData
-from data.stats import Stats
-from data.teams.team_stats import TeamStats
+from models.stats import Stats
+from features.teams.team_stats import TeamStats
 
 # from data.utils.data import *
 import numpy as np
@@ -99,7 +99,7 @@ df_team_games
 # %%
 # Compute pct cols
 
-from data.stats import Stats
+from models.stats import Stats
 
 stats = Stats()
 

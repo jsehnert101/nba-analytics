@@ -5,8 +5,8 @@ import numpy as np
 import pandas as pd
 from nba_api.stats.static import teams
 from nba_api.stats.library.parameters import LeagueID
-
-from data.utils.data import load_data, save_data
+from cachetools import cached
+from data.utils import load_data, save_data, retry, cache
 
 # from nba_api.stats.endpoints import FranchiseHistory
 
@@ -17,14 +17,16 @@ pd.options.display.max_columns = 50
 # Define class to wrangle + clean NBA team data
 class TeamData(object):
     def __init__(self):
-        self.raw_folder = "../../../data/raw/teams/"
-        self.processed_folder = "../../../data/processed/teams/"
+        self.raw_folder = "../../../data/internal/"
+        self.raw_folder = "../../../data/internal/raw/teams/"
+        self.processed_folder = "../../../data/internal/processed/teams/"
         self.folder_map = {
             "raw": self.raw_folder,
             "processed": self.processed_folder,
         }
         self.metadata = self.get_team_metadata()
         self.team_id_map = self.get_team_id_map()
+        self.team_name_map = self.get_team_name_map()
         self.all_team_ids = list(np.unique(list(self.team_id_map.values())))
         self.league_id = LeagueID.nba
         """self.franchise_history = (
@@ -59,6 +61,8 @@ class TeamData(object):
         """
         return load_data(pth=os.path.join(self._raw_folder, "team_metadata.pickle"))  # type: ignore
 
+    @cached(cache)
+    @retry
     def _retrieve_team_metadata(self) -> List[Dict[str, Any]]:
         """Retrieve NBA team metadata from nba_api.
 
@@ -126,12 +130,46 @@ class TeamData(object):
         Retrieves mapping from team name, abbreviation and city to team ID
         to ease access of Team IDs for future use.
 
-        Searches locally then online if not found.
+        Searches locally then retrieves from API if not found.
 
         Returns:
             Dict[str, int]: Mapping to team ID.
         """
-        team_id_map = self._load_team_id_map()
-        if team_id_map is None:
-            team_id_map = self._create_team_id_map()
-        return team_id_map
+        return self._load_team_id_map() or self._create_team_id_map()
+
+    def _load_team_name_map(self) -> Union[Dict[int, str], None]:
+        """Load Team Name Map from local file.
+
+        Returns:
+            Union[Dict[int, str], None]: Mapping from Team ID to Team Name.
+        """
+        return load_data(pth=os.path.join(self._processed_folder, "team_name_map.pickle"))  # type: ignore
+
+    def _create_team_name_map(self) -> Dict[int, str]:
+        """Create mapping from team ID to team name (i.e. inverse of team_id_map).
+
+        Returns:
+            Dict[int, str]: Mapping from team ID to team name.
+        """
+        team_name_map = {
+            id: name
+            for i, (name, id) in enumerate(self.team_id_map.items())
+            if i % 3 == 0
+        }
+        save_data(
+            data=team_name_map,
+            folder=self._processed_folder,
+            name="team_name_map.pickle",
+        )
+        return team_name_map
+
+    def get_team_name_map(self) -> Dict[int, str]:
+        """
+        Retrieves mapping from team ID to team name (i.e. inverse of team_id_map).
+
+        Searches locally then retrieves from API if not found.
+
+        Returns:
+            Dict[int, str]: Mapping from team ID to team name.
+        """
+        return self._load_team_name_map() or self._create_team_name_map()

@@ -4,8 +4,8 @@ import inspect
 from typing import List
 import numpy as np
 from numpy.typing import ArrayLike
-from data.stats import Stats
-from data.teams.team_stats import TeamStats
+from features.stats import Stats
+from features.teams.team_stats import TeamStats
 
 
 # %%

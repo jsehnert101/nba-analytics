@@ -9,9 +9,9 @@ import numpy as np
 import pandas as pd
 from nba_api.stats.endpoints import leaguegamefinder
 from nba_api.stats.library.parameters import LeagueID, SeasonType
-from data.utils.data import save_data, retry, cache
+from data.utils import save_data, retry, cache
 from data.teams.team_data import TeamData
-from data.teams.team_stats import TeamStats
+from features.teams.team_stats import TeamStats
 
 # %%
 # Write object to extend TeamData specifically for game data.
@@ -22,7 +22,7 @@ class TeamGameData(TeamData):
         super().__init__()
         self._load_data = load
         self._save_data = save
-        self.interim_folder = "../../../data/interim/teams/"
+        self.interim_folder = "../../../data/internal/interim/teams/"
         self.folder_map.update({"interim": self.interim_folder})
         self.team_stats = TeamStats()
 
@@ -87,9 +87,6 @@ class TeamGameData(TeamData):
         season_type = "".join(season_type.split())
         folder = os.path.join(self.folder_map[folder_type], "games", season_type)
         return save_data(data=team_games, folder=folder, name=f"{team_id}.parquet")
-
-    def impute_missing_stats(self):
-        """Manually replace missing statistics."""
 
     def _clean_team_games(
         self,
@@ -160,7 +157,7 @@ class TeamGameData(TeamData):
                 team_id=team_id, season_type=season_type
             )
             raw_pth = os.path.join(
-                self.folder_map[folder_type],
+                self.folder_map["raw"],
                 "games",
                 "".join(season_type.split()),
                 f"{team_id}.parquet",
@@ -206,7 +203,7 @@ class TeamGameData(TeamData):
                 np.repeat(season_type, len(team_ids)),
                 np.repeat(folder_type, len(team_ids)),
             )
-        return pd.concat([res for res in results])
+        return pd.concat(list(results))
 
     def add_independent_team_stats(self, df_team_games: pd.DataFrame) -> pd.DataFrame:
         """Add all basic + team stats to team game statistics"""
