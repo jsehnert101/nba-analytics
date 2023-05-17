@@ -11,7 +11,7 @@ from nba_api.stats.endpoints import leaguegamefinder
 from nba_api.stats.library.parameters import LeagueID, SeasonType
 from data.utils import save_data, retry, cache
 from data.teams.team_data import TeamData
-from features.teams.team_stats import TeamStats
+from features.team_stats import TeamStats
 
 # %%
 # Write object to extend TeamData specifically for game data.

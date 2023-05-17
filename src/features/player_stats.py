@@ -5,7 +5,7 @@ from typing import List
 import numpy as np
 from numpy.typing import ArrayLike
 from features.stats import Stats
-from features.teams.team_stats import TeamStats
+from features.team_stats import TeamStats
 
 
 # %%

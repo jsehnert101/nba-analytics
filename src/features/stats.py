@@ -40,10 +40,13 @@ class Stats(object):
             {  # Maps statistics to function for stats that don't require opponent data
                 "FG2A": self.two_point_attempts,
                 "FG2M": self.two_point_makes,
+                "FG2_PCT": self.two_point_pct,
                 "2PAr": self.two_point_attempt_rate,
                 "3PAr": self.three_point_attempt_rate,
                 "eFG_PCT": self.effective_field_goal_pct,
                 "TS_PCT": self.true_shooting_pct,
+                "MINOR_POSS": self.minor_possessions,
+                "MAJOR_POSS": self.major_possessions,
             }
         )
         self.dependent_stat_method_map = {}
@@ -189,7 +192,8 @@ class Stats(object):
         return np.sum(
             np.array(
                 [FGA, np.multiply(self._ft_weight, FTA), np.multiply(-1, OREB), TOV]
-            )
+            ),
+            axis=0,
         )
 
     def _true_shooting_attempts(self, FGA: ArrayLike, FTA: ArrayLike, **_) -> ArrayLike:

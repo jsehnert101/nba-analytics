@@ -5,8 +5,8 @@ from tqdm import tqdm
 
 # from data.teams.team_game_data import TeamGameData
 from data.teams.team_data import TeamData
-from models.stats import Stats
-from features.teams.team_stats import TeamStats
+from features.stats import Stats
+from features.team_stats import TeamStats
 
 # from data.utils.data import *
 import numpy as np

@@ -1,12 +1,11 @@
 # %%
 # Imports
-from data.teams.franchise_history import FranchiseHistory
+# from data.teams.franchise_history import FranchiseHistory
 from tqdm import tqdm
 
 # from data.teams.team_game_data import TeamGameData
 from data.teams.team_data import TeamData
-from models.stats import Stats
-from features.teams.team_stats import TeamStats
+from features.team_stats import TeamStats
 
 # from data.utils.data import *
 import numpy as np
@@ -21,7 +20,7 @@ sns.set_theme()
 
 from typing import Union, Callable, Dict, List, Tuple
 import pickle
-from nba_api.stats.static import teams
+
 
 # %%
 from data.teams.wrangle_team_data import TeamGameDataWrangler

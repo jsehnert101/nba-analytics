@@ -43,6 +43,7 @@ class TeamStats(Stats):
             }
         )
         self.dependent_stat_method_map = {  # Track methods which require opponent data
+            "PLUS_MINUS": self.plus_minus
             "REB_PCT": self.rebound_pct,
             "DREB_PCT": self.defensive_rebound_pct,
             "OREB_PCT": self.offensive_rebound_pct,
@@ -55,6 +56,18 @@ class TeamStats(Stats):
             "DEF_RATING": self.defensive_rating,
         }
         self.required_stat_params = self._get_required_stat_params()
+
+    def plus_minus(self, PTS: ArrayLike, OPP_PTS: ArrayLike, **_) -> ArrayLike:
+        """Plus Minus (PLUS_MINUS)
+            PLUS_MINUS = PTS - OPP_PTS
+        Args:
+            PTS (ArrayLike): points\n
+            OPP_PTS (ArrayLike): opponent points against\n
+
+        Returns:
+            ArrayLike: team point differential
+        """
+        return np.subtract(PTS, OPP_PTS)
 
     def rebound_pct(self, REB: ArrayLike, OPP_REB: ArrayLike, **_) -> ArrayLike:
         """
