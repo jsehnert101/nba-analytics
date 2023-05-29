@@ -7,6 +7,7 @@ Wrangle and analyze NBA statistics and betting information.
 
 Prerequisites
 
+The environment configuration relies on an [Anaconda Distribution](https://anaconda.org). Foe example, I use micromamba on my Apple Silicon device. 
 You should be familiar with the following in order to use this package:
 
 - git
@@ -16,6 +17,7 @@ You should be familiar with the following in order to use this package:
 - jupyter notebook
 - [nba-api](https://github.com/swar/nba_api/tree/master)
 - [odds-api](https://the-odds-api.com)
+- **Bonus:** requests
 
 Directions
 ------------
@@ -37,6 +39,7 @@ pip install -e ./src
 python test_environment.py
 
 # Get coding!
+# If you're looking for ways to get started, check our example notebooks under docs/examples.
 ```
 
 Refer to the notebooks in docs/examples for more information on retrieving and storing data locally, computing advanced statistics, applying machine learning models, and more!
