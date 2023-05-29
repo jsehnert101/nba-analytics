@@ -22,7 +22,7 @@ Directions
 
 ```bash
 # Clone the repository, ideally via ssh like:
-git clone git@github.com:jsehnert101/sports-analytics.git
+git clone git@github.com:jsehnert101/nba-analytics.git
 
 # Create conda env with required packages
 conda env create -f environment.yml
