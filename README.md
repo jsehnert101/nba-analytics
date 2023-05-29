@@ -28,7 +28,7 @@ git clone git@github.com:jsehnert101/nba-analytics.git
 conda env create -f environment.yml
 
 # Activate conda environment
-conda activate sports
+conda activate nba
 
 # Install local packages
 pip install -e ./src
