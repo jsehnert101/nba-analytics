@@ -3,6 +3,7 @@ Wrangle all team data from the NBA API and save it to the external/raw folder fo
 """
 from typing import List, Dict, Any, Union, Literal
 from tqdm import tqdm
+import numpy as np
 import pandas as pd
 from data.retriever import TeamDataRetriever
 from data.cleaner import TeamDataCleaner, TeamGameDataCleaner
@@ -164,11 +165,14 @@ class TeamGameDataWrangler(TeamDataWrangler):
                     outer_folder="external",
                     inner_folder="interim",
                 )
-                inputed_team_games = self.cleaner.inpute_team_game_data(
-                    team_id=team_id, team_games=clean_team_games
-                )
+                if clean_team_games.isna().sum().sum() > 0:
+                    imputed_team_games = self.cleaner.impute_team_game_data(
+                        team_id=team_id, team_games=clean_team_games
+                    )
+                else:
+                    imputed_team_games = clean_team_games.copy()
                 self._save_team_season_game_data(
-                    team_games=inputed_team_games,
+                    team_games=imputed_team_games,
                     team_id=team_id,
                     season_type_nullable=season_type,
                     outer_folder="external",

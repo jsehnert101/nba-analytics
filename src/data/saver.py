@@ -19,8 +19,8 @@ class DataSaver(Data):
 
         Args:
             data (_type_): data to be saved.\n
-            outer_folder (Literal["external", "internal"]): outer subfolder in which to save data.\n
-            inner_folder (Literal["raw", "interim", "processed", "inputation"]): inner subfolder in which to save data.\n
+            outer_folder (Literal["external", "internal"]): outer subfolder to save data.\n
+            inner_folder (Literal["raw", "interim", "processed", "inputation"]): inner subfolder to save data.\n
             subdir (str): inner folder subdirectory in which to save data.\n
             data_name (str): name of data to be saved.\n
         """
@@ -32,12 +32,11 @@ class DataSaver(Data):
                 pickle.dump(data, handle, protocol=pickle.HIGHEST_PROTOCOL)
         except FileNotFoundError:
             try:
-                print("Making directory...")
                 os.makedirs(folder_pth, exist_ok=True)
                 with open(os.path.join(folder_pth, data_name), "wb") as handle:
                     pickle.dump(data, handle, protocol=pickle.HIGHEST_PROTOCOL)
             except FileNotFoundError as e:
-                print(e)
+                pass
 
     def save_dataframe(
         self,
@@ -59,7 +58,6 @@ class DataSaver(Data):
         if data_name.split(".")[-1] != "parquet":
             data_name += ".parquet"
         folder_pth = os.path.join(self._folder_map[outer_folder][inner_folder], subdir)
-        print(folder_pth)
         try:
             df.to_parquet(os.path.join(folder_pth, data_name))
         except OSError:

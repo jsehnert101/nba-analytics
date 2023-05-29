@@ -2,10 +2,11 @@
 Data cleaning module for NBA data.
 """
 from typing import List, Dict, Any, Union
+import numpy as np
+import pandas as pd
 from data.base import Data
 from data.loader import TeamGameDataLoader
 from data.saver import DataSaver
-import pandas as pd
 from utils.web import open_url
 
 
@@ -16,6 +17,10 @@ class DataCleaner(Data):
 
 
 class TeamDataCleaner(DataCleaner):
+    def __init__(self):
+        super().__init__()
+        self._missing_cols = ["DREB", "OREB"]
+
     def extract_team_ids(self, metadata: List[Dict[str, Any]]) -> List[int]:
         """Extract team IDs from team metadata.
 
@@ -83,44 +88,78 @@ class TeamGameDataCleaner(TeamDataCleaner):
         else:
             raise ValueError(f"Matchup {matchup} not formatted correctly!")
 
+    def _replace_matchups(self, matchup: pd.Series) -> pd.Series:
+        """Ensure consistent team abbreviations."""
+        return matchup.str.replace("GOS", "GSW").str.replace("UTH", "UTA")
+
+    def _adjust_three_point_shooting(self, team_games: pd.DataFrame) -> pd.DataFrame:
+        """Adjust 3PT% for games prior to 2000-01 season."""
+        team_games.loc[:, "FG3_PCT"] = team_games.FG3M.divide(team_games.FG3A)
+        team_games.loc[team_games.FG3A.eq(0), "FG3_PCT"] = 0.0
+        return team_games
+
     def clean_team_game_data(self, team_games: pd.DataFrame) -> pd.DataFrame:
-        team_games.drop(columns=["PLUS_MINUS"], inplace=True)
-        team_games.rename(columns={"MIN": "MP"}, inplace=True)
-        team_games.loc[:, "MATCHUP"] = team_games.MATCHUP.str.replace("GOS", "GSW")
-        team_games.loc[:, "MATCHUP"] = team_games.MATCHUP.str.replace("UTH", "UTA")
+        """Clean team game data.\n
+        Ensure team abbreviations are consistent, denote home/away games,
+        adjust datetime format, correct missing 3PT% data, etc.
+
+        Args:
+            team_games (pd.DataFrame): team game dataframe\n
+
+        Returns:
+            pd.DataFrame: clean team game data
+        """
+        team_games = team_games.drop(columns=["PLUS_MINUS"]).rename(
+            columns={"MIN": "MP"}
+        )
         team_games["WIN"] = team_games.WL.replace({"W": True, "L": False})
         team_games["HOME"] = team_games.MATCHUP.str.contains("vs.")
-        team_games.loc[team_games.FG3A == 0, "FG3_PCT"] = 0
+        team_games.loc[:, "MATCHUP"] = self._replace_matchups(team_games.MATCHUP)
+        team_games = self._adjust_three_point_shooting(team_games)
         team_games["GAME_DATE"] = pd.to_datetime(team_games.GAME_DATE)
         team_games = team_games.sort_values("GAME_DATE", ascending=True).reset_index(
             drop=True
         )
+        # DREB/OREB data tends to be missing, so make sure we aren't filling faulty values.
+        for col in self._missing_cols:
+            team_games.loc[team_games.GAME_DATE < "2000-1-1", col] = team_games.loc[
+                team_games.GAME_DATE < "2000-1-1", col
+            ].replace({0: np.NaN})
         return team_games
 
-    def inpute_team_game_data(
+    def impute_team_game_data(
         self, team_id: int, team_games: pd.DataFrame
     ) -> pd.DataFrame:
-        if team_games.drop(columns=["FG3_PCT"]).isna().sum().sum() == 0:
-            return team_games
-        else:
-            team_games_copy = team_games.set_index("GAME_ID").copy(deep=True)
-            try:
-                team_games_copy = team_games_copy.fillna(
-                    pd.DataFrame().from_dict(
-                        self.imputation_map[team_id], orient="index"
-                    )
-                )
-                if team_games_copy.drop(columns=["FG3_PCT"]).isna().sum().sum() == 0:
-                    return team_games_copy.reset_index()
-            except KeyError:
-                pass
+        """Manually replace missing team game data.\n
+        For each game with missing data, two things will happen:\n
+            1. A web browser will open to the corresponding boxscore on basketball-reference.com
+            2. The user will be prompted to enter the missing data
+        If the missing data is not available, the user should enter -1 as directed by the prompt.
 
+        Args:
+            team_id (int): team id whose missing values we're replacing
+            team_games (pd.DataFrame): dataframe of team games
+
+        Returns:
+            pd.DataFrame: team game data with missing data filled, if possible.
+        """
+        team_games.set_index("GAME_ID", inplace=True)
+        try:
+            team_games = team_games.fillna(
+                pd.DataFrame().from_dict(self.imputation_map[team_id], orient="index")
+            )
+            if team_games.isna().sum().sum() == 0:
+                return team_games.reset_index()
+            else:
+                team_games.reset_index(inplace=True)
+        except KeyError:
+            pass
         missing_cols = team_games.columns[team_games.isna().any()].tolist()
         if "FG3_PCT" in missing_cols:
             missing_cols.remove("FG3_PCT")
         missing_df = team_games.loc[
             team_games.loc[:, missing_cols].isna().any(axis=1), :
-        ].drop(columns=["FG3_PCT"])
+        ]
         for idx, row in missing_df.iterrows():
             self.imputation_map[team_id][row.GAME_ID] = {}
             url_game_date = row.GAME_DATE.strftime("%Y%m%d")
@@ -133,13 +172,22 @@ class TeamGameDataCleaner(TeamDataCleaner):
             )
             missing_stats = row[row.isna()].index.tolist()
             for stat in missing_stats:
+                if stat == "FG3_PCT":
+                    continue
                 fill_val = int(
                     input(
-                        f"How many {stat} did {row.TEAM_NAME} have in their game {row.MATCHUP} on {row.GAME_DATE.strftime('%b %-d, %Y')}?"
+                        f"""
+                        How many {stat} did {row.TEAM_NAME} have in their game {row.MATCHUP}
+                        on {row.GAME_DATE.strftime('%b %-d, %Y')}? Enter -1 for missing data.
+                        """
                     )
                 )
-                team_games.loc[idx, stat] = fill_val  # type: ignore
+                if fill_val == -1:
+                    fill_val = np.NaN
+                else:
+                    team_games.loc[idx, stat] = fill_val  # type: ignore
                 self.imputation_map[team_id][row.GAME_ID][stat] = fill_val
+        team_games = self._adjust_three_point_shooting(team_games)
         self.saver.save_data(
             data=self.imputation_map,
             outer_folder="internal",

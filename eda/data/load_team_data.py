@@ -111,7 +111,7 @@ from nba_api.stats.library.parameters import SeasonType, Season
 
 Season
 # %%
-from data.teams.franchise_history import FranchiseHistory
+from eda.old.franchise_history import FranchiseHistory
 
 f = FranchiseHistory()
 f.active_teams_franchise_history

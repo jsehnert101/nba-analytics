@@ -19,7 +19,6 @@ def save(func: Callable):
     """
 
     def save_wrapper(*args, **kwargs) -> bool:
-        print("Saving data...")
         try:
             return func(*args, **kwargs)
         except Exception:
@@ -54,14 +53,12 @@ def save_data(data, folder: str, name: str) -> bool:
             name += ".parquet"
         pth = os.path.join(folder, name)
         data.to_parquet(pth)
-        print(f"{name} saved to {os.path.abspath(folder)}")
         return True
     elif name.split(".")[-1] != "pickle":
         name += ".pickle"
     pth = os.path.join(folder, name)
     with open(pth, "wb") as handle:
         pickle.dump(data, handle, protocol=pickle.HIGHEST_PROTOCOL)
-    print(f"{name} saved to {os.path.abspath(folder)}")
     return True
 
 
@@ -79,7 +76,7 @@ def load_data(pth: str) -> Union[Dict, List, Tuple, None]:
             data = pickle.load(handle)
         return data
     except FileNotFoundError as e:
-        print(e)
+        # print(e)
         return None
 
 

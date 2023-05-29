@@ -43,7 +43,7 @@ class TeamStats(Stats):
             }
         )
         self.dependent_stat_method_map = {  # Track methods which require opponent data
-            "PLUS_MINUS": self.plus_minus
+            "PLUS_MINUS": self.plus_minus,
             "REB_PCT": self.rebound_pct,
             "DREB_PCT": self.defensive_rebound_pct,
             "OREB_PCT": self.offensive_rebound_pct,
