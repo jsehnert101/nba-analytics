@@ -15,6 +15,7 @@ You should be familiar with the following in order to use this package:
 - pandas
 - jupyter notebook
 - [nba-api](https://github.com/swar/nba_api/tree/master)
+- [odds-api](https://the-odds-api.com)
 
 Directions
 ------------
@@ -37,6 +38,8 @@ python test_environment.py
 
 # Get coding!
 ```
+
+Refer to the notebooks in docs/examples for more information on retrieving and storing data locally, computing advanced statistics, applying machine learning models, and more!
 
 Please read this if you plan on contributing.
 ------------
