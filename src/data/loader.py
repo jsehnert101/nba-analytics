@@ -165,8 +165,8 @@ class TeamGameDataLoader(TeamDataLoader):
             )
         )
 
-    def load_inputation_map(self):
-        """Load team game inputation map to facilitate inputation of missing data.
+    def load_imputation_map(self):
+        """Load team game imputation map to facilitate inputation of missing data.
 
         Returns:
             Dict[int, Dict[str, Dict[str, Union[str, int]]]]: team game data inputation map.
@@ -176,7 +176,7 @@ class TeamGameDataLoader(TeamDataLoader):
             outer_folder="internal",
             inner_folder="inputation",
             subdir="teams/games",
-            data_name="inputation_map.pickle",
+            data_name="imputation_map.pickle",
         )
 
     def load_team_season_games(  # TODO account for various levels of cleaning

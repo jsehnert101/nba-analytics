@@ -36,8 +36,40 @@ class Stats(object):
         self._four_factor_turnover_weight = four_factor_turnover_weight
         self._four_factor_rebounding_weight = four_factor_rebounding_weight
         self._four_factor_free_throw_weight = four_factor_free_throw_weight
+        self.basic_box_score_stats = [
+            "PTS",
+            "FGM",
+            "FGA",
+            "FG3M",
+            "FG3A",
+            "FTM",
+            "FTA",
+            "OREB",
+            "DREB",
+            "REB",
+            "AST",
+            "STL",
+            "BLK",
+            "TOV",
+            "PF",
+        ]
+        self.basic_box_score_percentages = [
+            "FG_PCT",
+            "FG2_PCT",
+            "FG3_PCT",
+            "FT_PCT",
+            "OREB_PCT",
+            "DREB_PCT",
+            "REB_PCT",
+            "AST_PCT",
+            "TOV_PCT",
+            "EFG_PCT",
+            "TS_PCT",
+        ]
         self.independent_stat_method_map = (
             {  # Maps statistics to function for stats that don't require opponent data
+                "FG_PCT": self.field_goal_percentage,
+                "FT_PCT": self.free_throw_percentage,
                 "FG2A": self.two_point_attempts,
                 "FG2M": self.two_point_makes,
                 "FG2_PCT": self.two_point_pct,
@@ -51,6 +83,30 @@ class Stats(object):
         )
         self.dependent_stat_method_map = {}
         self.required_stat_params = self._get_required_stat_params()
+
+    def field_goal_percentage(self, FGM: ArrayLike, FGA: ArrayLike, **_) -> ArrayLike:
+        """Field goal percentage (FG_PCT).
+
+        Args:
+            FGM (ArrayLike): field goals made\n
+            FGA (ArrayLike): field goals attempted\n
+
+        Returns:
+            ArrayLike: field goal percentage
+        """
+        return np.divide(FGM, FGA)
+
+    def free_throw_percentage(self, FTM: ArrayLike, FTA: ArrayLike, **_) -> ArrayLike:
+        """Free throw percentage (FT_PCT).
+
+        Args:
+            FTM (ArrayLike): free throws made\n
+            FTA (ArrayLike): free throws attempted\n
+
+        Returns:
+            ArrayLike: free throw percentage
+        """
+        return np.divide(FTM, FTA)
 
     def two_point_attempts(self, FGA: ArrayLike, FG3A: ArrayLike, **_) -> ArrayLike:
         """Two point attempts (FG2A).

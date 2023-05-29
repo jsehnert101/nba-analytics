@@ -55,7 +55,7 @@ class TeamStats(Stats):
             "OFF_RATING": self.offensive_rating,
             "DEF_RATING": self.defensive_rating,
         }
-        self.required_stat_params = self._get_required_stat_params()
+        self.required_stat_params += self._get_required_stat_params()
 
     def plus_minus(self, PTS: ArrayLike, OPP_PTS: ArrayLike, **_) -> ArrayLike:
         """Plus Minus (PLUS_MINUS)

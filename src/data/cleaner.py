@@ -78,7 +78,7 @@ class TeamGameDataCleaner(TeamDataCleaner):
         self.imputation_map = self._get_imputation_map(team_ids=team_ids)
 
     def _get_imputation_map(self, team_ids: List[int]):
-        return self.loader.load_inputation_map() or {id: {} for id in team_ids}
+        return self.loader.load_imputation_map() or {id: {} for id in team_ids}
 
     def _extract_team_abbreviations(self, matchup: str) -> List[str]:
         if "@" in matchup:
@@ -191,7 +191,7 @@ class TeamGameDataCleaner(TeamDataCleaner):
         self.saver.save_data(
             data=self.imputation_map,
             outer_folder="internal",
-            inner_folder="inputation",
+            inner_folder="imputation",
             subdir="teams/games",
             data_name="inputation_map.pickle",
         )
