@@ -1,18 +1,24 @@
-# %%
-# Imports
+"""
+This module facilitates internal data retrieval, transformation, etc.
+"""
 from typing import List, Tuple, Dict, Union, Literal
-from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, wait
+from concurrent.futures import ThreadPoolExecutor, wait
+from pandarallel import pandarallel
 import os
 import pickle
-from tqdm import tqdm
 import pandas as pd
 from data.base import Data
-from features.team_stats import TeamStats
+from features.stats import TeamStats
 from utils.data import join_str
 
 
-# %%
 class DataLoader(Data):
+    """Load internally stored data.
+
+    Args:
+        Data (_type_): base class for data objects.
+    """
+
     def load_data(
         self,
         outer_folder: Literal["external", "internal"],
@@ -73,6 +79,8 @@ class DataLoader(Data):
 
 
 class TeamDataLoader(DataLoader):
+    """Load and manipulate NBA team data."""
+
     def load_team_metadata(self):
         """Load NBA team metadata from local file system.
 
@@ -127,9 +135,11 @@ class TeamDataLoader(DataLoader):
 
 
 class TeamGameDataLoader(TeamDataLoader):
+    """Load and manipulate NBA team game data."""
+
     def __init__(self):
         super().__init__()
-        self.team_stats = TeamStats()
+        self.stats = TeamStats()
         self.regular_season_ids = self._create_regular_season_id_list()
         self.playoff_season_ids = self._create_playoff_season_id_list()
 
@@ -255,14 +265,14 @@ class TeamGameDataLoader(TeamDataLoader):
     def add_independent_team_stats(self, team_games: pd.DataFrame) -> pd.DataFrame:
         """Add all basic + team stats to team game statistics"""
         team_games_dict = team_games.loc[
-            :, team_games.columns.isin(self.team_stats.required_stat_params)
+            :, team_games.columns.isin(self.stats.basic_required_stat_params)
         ].to_dict(  # type: ignore
             orient="list"
         )
         for (
             stat_name,
             stat_func,
-        ) in self.team_stats.independent_stat_method_map.items():
+        ) in self.stats.independent_stat_method_map.items():
             team_games[stat_name] = stat_func(**team_games_dict)
         return team_games
 
@@ -284,18 +294,17 @@ class TeamGameDataLoader(TeamDataLoader):
                 .add_prefix("OPP_"),
             ],
             axis=1,
+            join="inner",
         )
 
     def add_dependent_team_stats(self, team_games: pd.DataFrame) -> pd.DataFrame:
         """Add all dependent team stats to team game statistics"""
         team_games_dict = team_games.loc[
-            :, team_games.columns.isin(self.team_stats.required_stat_params)
+            :, team_games.columns.isin(self.stats.all_required_stat_params)
         ].to_dict(  # type: ignore
             orient="list"
         )
-        for stat_name, stat_func in tqdm(
-            self.team_stats.dependent_stat_method_map.items()
-        ):
+        for stat_name, stat_func in self.stats.dependent_stat_method_map.items():
             team_games[stat_name] = stat_func(**team_games_dict)
         return team_games
 
@@ -305,15 +314,24 @@ class TeamGameDataLoader(TeamDataLoader):
             "Pre Season", "Regular Season", "Playoffs"
         ] = "Regular Season",
         add_stats: bool = True,
-        max_workers: int = 6,  # TODO: multiprocessing
+        stat_agg_type: Literal["raw", "expanding", "rolling"] = "raw",
+        win_size: int = 10,
+        max_workers: int = 6,
     ) -> pd.DataFrame:
-        """Load all team game data from local file system.
+        """Load all team game data from local file system using multiprocessing.
 
         Args:
-            season_type_nullable (str): season type (i.e. Pre Season, Regular Season, Playoffs)
+            season_type_nullable (Literal["Pre Season", "Regular Season", "Playoffs"], optional): portion of season to wrangle. Defaults to "Regular Season".\n
+            add_stats (bool, optional): whether or not to add statistics. Defaults to True.\n
+            stat_agg_type (Literal["raw", "expanding", "rolling"], optional): stat aggregation method. Defaults to "raw".\n
+            win_size (int, optional): rolling window size. Defaults to 10.\n
+            max_workers (int, optional): # threads for multiprocessing. Defaults to 6.\n
+
+        Raises:
+            ValueError: invalid season_type_nullable or stat_agg_type provided.
 
         Returns:
-            pd.DataFrame: team game data
+            pd.DataFrame: dataframe of all team game data.
         """
         max_workers = min(max_workers, max(int(os.cpu_count() or 0), max_workers) + 4)
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
@@ -327,11 +345,73 @@ class TeamGameDataLoader(TeamDataLoader):
             ]
             _ = wait(futures)
             team_games = pd.concat([future.result() for future in futures])
-        team_games = (
-            self.add_independent_team_stats(team_games) if add_stats else team_games
-        )
+
+        if not add_stats:
+            return team_games
+        elif stat_agg_type == "raw":
+            team_games = self.add_independent_team_stats(team_games)
+        else:
+            team_games.sort_values("GAME_DATE", inplace=True)
+            team_games["FG2A"] = self.stats.two_point_attempts(
+                FGA=team_games.FGA, FG3A=team_games.FG3A
+            )
+            team_games["FG2M"] = self.stats.two_point_makes(
+                FGM=team_games.FGM, FG3M=team_games.FG3M
+            )
+            df_group = team_games.groupby(["SEASON_ID", "TEAM_ID"], group_keys=True)
+
+            if stat_agg_type == "expanding":
+                basic_stats = df_group[self.stats.basic_box_score_stats].parallel_apply(
+                    lambda x: x.expanding().mean().shift()
+                )  # type: ignore
+                basic_cum_stats = self.add_independent_team_stats(
+                    df_group[self.stats.basic_required_stat_params].parallel_apply(
+                        lambda x: x.expanding().sum().shift()
+                    )  # type: ignore
+                ).loc[:, self.stats.basic_box_score_cum_stats]
+            elif stat_agg_type == "rolling":
+                basic_stats = (
+                    df_group[self.stats.basic_box_score_stats]
+                    .rolling(window=win_size, closed="left")
+                    .mean()
+                )
+                basic_cum_stats = self.add_independent_team_stats(
+                    df_group[self.stats.basic_required_stat_params]
+                    .rolling(window=win_size, closed="left")
+                    .sum()
+                ).loc[:, self.stats.basic_box_score_cum_stats]
+            else:
+                raise ValueError("Invalid stat_agg_type")
+
+            cum_stats = pd.concat([basic_stats, basic_cum_stats], axis=1).dropna(
+                axis=0, how="all"
+            )
+            cum_stats.index = cum_stats.index.droplevel(2)
+            team_games = (
+                team_games.set_index(["SEASON_ID", "TEAM_ID"])
+                .loc[
+                    :,
+                    [
+                        "GAME_ID",
+                        "GAME_DATE",
+                        "TEAM_ABBREVIATION",
+                        "TEAM_NAME",
+                        "MATCHUP",
+                        "WL",
+                        "WIN",
+                        "HOME",
+                        "MP",
+                    ],
+                ]
+                .merge(cum_stats, how="left", left_index=True, right_index=True)
+                .reset_index()
+            )
+            return team_games, cum_stats
+
         team_games = self._merge_team_games(team_games)
-        return self.add_dependent_team_stats(team_games) if add_stats else team_games
+        team_games = self.add_dependent_team_stats(team_games)
+        return team_games
 
 
-# %%
+if __name__ == "__main__":
+    pandarallel.initialize(progress_bar=False, verbose=False, nb_workers=5)

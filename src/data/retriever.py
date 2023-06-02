@@ -8,17 +8,24 @@ from cachetools import cached
 from utils.data import retry, cache
 
 
-# Base class
-class DataRetriever(object):
+class DataRetriever:
+    """Base class for data retrieval objects."""
+
     def __init__(self):
         self.league_id = LeagueID.nba
 
 
-# Team data
 class TeamDataRetriever(DataRetriever):
+    """Retrieve NBA team data from nba-api."""
+
     @cached(cache)
     @retry
     def retrieve_team_metadata(self) -> List[Dict[str, Any]]:
+        """Retrieves team metadata from nba-api.
+
+        Returns:
+            List[Dict[str, Any]]: NBA team metadata.
+        """
         return teams.get_teams()
 
     @cached(cache)
@@ -43,4 +50,5 @@ class TeamDataRetriever(DataRetriever):
         ).get_data_frames()[0]
 
 
-# Player data
+if __name__ == "__main__":
+    pass
