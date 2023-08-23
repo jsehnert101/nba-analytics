@@ -7,7 +7,7 @@ Wrangle and analyze NBA statistics and betting information.
 
 Prerequisites
 
-The environment configuration relies on an [Anaconda Distribution](https://anaconda.org). Foe example, I use micromamba on my Apple Silicon device. 
+The environment configuration relies on an [Anaconda Distribution](https://anaconda.org). For example, I use micromamba on my Apple Silicon device. 
 You should be familiar with the following in order to use this package:
 
 - git
